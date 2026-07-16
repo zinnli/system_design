@@ -24,6 +24,12 @@ export class UploadManager {
   private readonly sessions = new Map<string, UploadSession>();
   private readonly listeners = new Set<() => void>();
   private readonly pool: ConcurrencyPool;
+  /**
+   * React의 useSyncExternalStore는 getSnapshot()이 변경 없이 매번 새
+   * 배열을 반환하면 무한 리렌더로 이어진다. 상태가 실제로 바뀔 때(emit)만
+   * 캐시를 무효화해 참조 동일성을 보장한다.
+   */
+  private cachedSnapshot: UploadFileState[] | null = null;
 
   constructor(
     private readonly validationConfig: ValidationConfig = DEFAULT_VALIDATION_CONFIG,
@@ -38,7 +44,10 @@ export class UploadManager {
   }
 
   getSnapshot(): UploadFileState[] {
-    return Array.from(this.files.values());
+    if (!this.cachedSnapshot) {
+      this.cachedSnapshot = Array.from(this.files.values());
+    }
+    return this.cachedSnapshot;
   }
 
   addFiles(incoming: File[]): { rejected: { file: File; error: string }[] } {
@@ -100,6 +109,7 @@ export class UploadManager {
   }
 
   private emit(): void {
+    this.cachedSnapshot = null;
     for (const listener of this.listeners) listener();
   }
 
