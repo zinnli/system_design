@@ -5,7 +5,7 @@ import { NetworkSimulationPanel } from "./components/NetworkSimulationPanel";
 import { useFileUpload } from "./hooks/useFileUpload";
 
 export function App() {
-  const { files, addFiles, cancel, retry } = useFileUpload();
+  const { files, addFiles, cancel, retry, remove } = useFileUpload();
   const [rejections, setRejections] = useState<
     { file: File; error: string }[]
   >([]);
@@ -27,15 +27,15 @@ export function App() {
 
       {rejections.length > 0 && (
         <ul className="rejection-list">
-          {rejections.map(({ file, error }) => (
-            <li key={file.name}>
+          {rejections.map(({ file, error }, index) => (
+            <li key={`${index}-${file.name}`}>
               <strong>{file.name}</strong>: {error}
             </li>
           ))}
         </ul>
       )}
 
-      <FileList files={files} onCancel={cancel} onRetry={retry} />
+      <FileList files={files} onCancel={cancel} onRetry={retry} onRemove={remove} />
     </main>
   );
 }

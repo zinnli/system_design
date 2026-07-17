@@ -10,20 +10,24 @@ const STATUS_LABEL: Record<UploadStatus, string> = {
   canceled: "취소됨",
 };
 
+const STATUS_TONE: Record<UploadStatus, "normal" | "success" | "error"> = {
+  queued: "normal",
+  uploading: "normal",
+  success: "success",
+  error: "error",
+  canceled: "normal",
+};
+
+const REMOVABLE_STATUSES = new Set<UploadStatus>(["success", "error", "canceled"]);
+
 interface FileItemProps {
   state: UploadFileState;
   onCancel: (id: string) => void;
   onRetry: (id: string) => void;
+  onRemove: (id: string) => void;
 }
 
-export function FileItem({ state, onCancel, onRetry }: FileItemProps) {
-  const tone =
-    state.status === "error"
-      ? "error"
-      : state.status === "success"
-        ? "success"
-        : "normal";
-
+export function FileItem({ state, onCancel, onRetry, onRemove }: FileItemProps) {
   return (
     <li className="file-item">
       <div className="file-item__header">
@@ -35,7 +39,7 @@ export function FileItem({ state, onCancel, onRetry }: FileItemProps) {
         </span>
       </div>
 
-      <ProgressBar percent={state.progress} tone={tone} />
+      <ProgressBar percent={state.progress} tone={STATUS_TONE[state.status]} />
 
       <div className="file-item__meta">
         <span>
@@ -56,6 +60,11 @@ export function FileItem({ state, onCancel, onRetry }: FileItemProps) {
         {state.status === "error" && (
           <button type="button" onClick={() => onRetry(state.id)}>
             재시도
+          </button>
+        )}
+        {REMOVABLE_STATUSES.has(state.status) && (
+          <button type="button" onClick={() => onRemove(state.id)}>
+            삭제
           </button>
         )}
       </div>
