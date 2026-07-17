@@ -192,4 +192,133 @@ describe("UploadManager", () => {
     ).length;
     expect(chunk0CallsAfter).toBe(callsBeforeRetry); // 재업로드되지 않음
   });
+
+  it("파일을 추가하면 uploading으로 넘어가기 전에 queued 상태가 최소 한 번 관찰된다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = requestUrl(input);
+        const method = init?.method ?? "GET";
+        if (method === "POST" && url === "/api/uploads") {
+          return new Response(JSON.stringify({ uploadId: "u1" }), {
+            status: 200,
+          });
+        }
+        if (method === "PUT") return new Response(null, { status: 204 });
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    const manager = new UploadManager(validationConfig, chunkConfig);
+    const seenStatuses: string[] = [];
+    manager.subscribe(() => {
+      const state = manager.getSnapshot()[0];
+      if (state) seenStatuses.push(state.status);
+    });
+
+    manager.addFiles([makeFile("h.bin", 10)]);
+    const id = manager.getSnapshot()[0]!.id;
+    await waitForStatus(manager, id, "success");
+
+    expect(seenStatuses).toContain("queued");
+  });
+
+  it("완료된 파일은 remove()로 지울 수 있고, 지운 뒤에는 같은 이름을 다시 추가할 수 있다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = requestUrl(input);
+        const method = init?.method ?? "GET";
+        if (method === "POST" && url === "/api/uploads") {
+          return new Response(JSON.stringify({ uploadId: "u1" }), {
+            status: 200,
+          });
+        }
+        if (method === "PUT") return new Response(null, { status: 204 });
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    const manager = new UploadManager(validationConfig, chunkConfig);
+    manager.addFiles([makeFile("f.bin", 10)]);
+    const id = manager.getSnapshot()[0]!.id;
+    await waitForStatus(manager, id, "success");
+
+    manager.remove(id);
+    expect(manager.getSnapshot()).toHaveLength(0);
+
+    const { rejected } = manager.addFiles([makeFile("f.bin", 10)]);
+    expect(rejected).toHaveLength(0);
+    expect(manager.getSnapshot()).toHaveLength(1);
+  });
+
+  it("업로드 중인 파일은 remove()로 지워지지 않는다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = requestUrl(input);
+        const method = init?.method ?? "GET";
+        if (method === "POST" && url === "/api/uploads") {
+          return new Response(JSON.stringify({ uploadId: "u1" }), {
+            status: 200,
+          });
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return new Response(null, { status: 204 });
+      }),
+    );
+
+    const manager = new UploadManager(validationConfig, chunkConfig);
+    manager.addFiles([makeFile("g.bin", 25)]);
+    const id = manager.getSnapshot()[0]!.id;
+    await waitForStatus(manager, id, "uploading");
+
+    manager.remove(id);
+    expect(manager.getSnapshot()).toHaveLength(1);
+  });
+
+  it("completeUpload가 서버에서 이미 처리된 뒤 취소가 겹쳐도 success로 확정된다", async () => {
+    let resolveComplete: (() => void) | null = null;
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = requestUrl(input);
+        const method = init?.method ?? "GET";
+        if (method === "POST" && url === "/api/uploads") {
+          return new Response(JSON.stringify({ uploadId: "u1" }), {
+            status: 200,
+          });
+        }
+        if (method === "PUT") return new Response(null, { status: 204 });
+        if (method === "POST" && /\/complete$/.test(url)) {
+          // 서버는 이미 파일을 완성했다고 가정하고, cancel()이 abort()를
+          // 호출한 뒤에야 응답이 도착하는 상황을 흉내낸다.
+          await new Promise<void>((resolve) => {
+            resolveComplete = resolve;
+          });
+          return new Response(null, { status: 200 });
+        }
+        throw new Error(`unexpected request ${method} ${url}`);
+      }),
+    );
+
+    const manager = new UploadManager(validationConfig, chunkConfig);
+    manager.addFiles([makeFile("e.bin", 25)]);
+    const id = manager.getSnapshot()[0]!.id;
+
+    await vi.waitFor(
+      () => {
+        if (!resolveComplete) throw new Error("complete 호출 대기 중");
+      },
+      { timeout: 2000, interval: 5 },
+    );
+
+    manager.cancel(id);
+    expect(findState(manager, id)?.status).toBe("canceled");
+
+    resolveComplete!();
+
+    await waitForStatus(manager, id, "success");
+  });
 });

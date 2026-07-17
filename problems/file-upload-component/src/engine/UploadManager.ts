@@ -6,13 +6,33 @@ import { completeUpload, initUpload, uploadChunk } from "./uploadApi";
 import { DEFAULT_VALIDATION_CONFIG, validateFiles } from "./validateFile";
 import { withRetry } from "./withRetry";
 
+/**
+ * AbortController.abort()에 넘기는 reason. session.controller.signal.reason과
+ * 비교해 "사용자가 취소했다"를 판별하는 유일한 근거로 쓴다 — 별도의 boolean
+ * 플래그를 두면 새 abort 경로가 추가될 때마다 그 플래그를 깜빡하고 안 챙길
+ * 위험이 있어서, signal 자체를 단일 진실 공급원으로 삼았다.
+ */
+const USER_CANCEL_REASON = "user-cancel";
+
 interface UploadSession {
   controller: AbortController;
   chunks: Blob[];
   doneIndexes: Set<number>;
   uploadId?: string;
-  canceledByUser: boolean;
 }
+
+function isUserCanceled(session: UploadSession): boolean {
+  return (
+    session.controller.signal.aborted &&
+    session.controller.signal.reason === USER_CANCEL_REASON
+  );
+}
+
+const TERMINAL_STATUSES: ReadonlySet<UploadFileState["status"]> = new Set([
+  "success",
+  "error",
+  "canceled",
+]);
 
 /**
  * 파일 업로드의 상태와 네트워크 흐름을 소유하는 프레임워크 독립적인 엔진.
@@ -74,7 +94,9 @@ export class UploadManager {
         error: null,
         attempt: 0,
       });
-      void this.startUpload(id);
+      // 다음 microtask로 미뤄서 'queued' 상태가 최소 한 번은 구독자에게
+      // 관찰된 뒤에 'uploading'으로 넘어가도록 한다.
+      queueMicrotask(() => void this.startUpload(id));
     }
 
     this.emit();
@@ -84,8 +106,7 @@ export class UploadManager {
   cancel(id: string): void {
     const session = this.sessions.get(id);
     if (!session) return;
-    session.canceledByUser = true;
-    session.controller.abort();
+    session.controller.abort(USER_CANCEL_REASON);
     this.patch(id, { status: "canceled" });
   }
 
@@ -98,7 +119,20 @@ export class UploadManager {
       error: null,
       attempt: state.attempt + 1,
     });
-    void this.startUpload(id);
+    queueMicrotask(() => void this.startUpload(id));
+  }
+
+  /**
+   * 완료/실패/취소된 파일을 목록에서 지운다. 진행 중인 파일은 지울 수 없다
+   * (먼저 cancel을 호출해야 한다). 세션이 들고 있던 청크 Blob 배열과
+   * doneIndexes도 함께 해제되어 메모리에 무한정 쌓이지 않는다.
+   */
+  remove(id: string): void {
+    const state = this.files.get(id);
+    if (!state || !TERMINAL_STATUSES.has(state.status)) return;
+    this.files.delete(id);
+    this.sessions.delete(id);
+    this.emit();
   }
 
   private patch(id: string, changes: Partial<UploadFileState>): void {
@@ -117,14 +151,12 @@ export class UploadManager {
     const existing = this.sessions.get(id);
     if (existing) {
       existing.controller = new AbortController();
-      existing.canceledByUser = false;
       return existing;
     }
     const created: UploadSession = {
       controller: new AbortController(),
       chunks: chunkFile(file, this.chunkConfig.chunkSizeBytes),
       doneIndexes: new Set<number>(),
-      canceledByUser: false,
     };
     this.sessions.set(id, created);
     return created;
@@ -141,7 +173,12 @@ export class UploadManager {
 
     try {
       if (!session.uploadId) {
-        const { uploadId } = await initUpload(state.file, controller.signal);
+        const { uploadId } = await withRetry(
+          () => initUpload(state.file, controller.signal),
+          this.chunkConfig.maxRetriesPerChunk,
+          this.chunkConfig.retryBaseDelayMs,
+          controller.signal,
+        );
         session.uploadId = uploadId;
       }
       const uploadId = session.uploadId;
@@ -153,6 +190,13 @@ export class UploadManager {
       const remaining = chunks
         .map((_, index) => index)
         .filter((index) => !doneIndexes.has(index));
+
+      // 이미 완료된 청크의 바이트 합만 한 번 계산하고, 이후로는 완료될
+      // 때마다 더해나간다 (매 청크마다 전체를 다시 합산하지 않는다).
+      let uploadedBytes = Array.from(doneIndexes).reduce(
+        (sum, i) => sum + (chunks[i]?.size ?? 0),
+        0,
+      );
 
       await Promise.all(
         remaining.map((index) =>
@@ -177,10 +221,7 @@ export class UploadManager {
               return;
             }
             doneIndexes.add(index);
-            const uploadedBytes = Array.from(doneIndexes).reduce(
-              (sum, i) => sum + (chunks[i]?.size ?? 0),
-              0,
-            );
+            uploadedBytes += chunks[index]?.size ?? 0;
             this.patch(id, {
               completedChunks: doneIndexes.size,
               uploadedBytes,
@@ -190,17 +231,24 @@ export class UploadManager {
         ),
       );
 
-      if (session.canceledByUser) return;
+      if (isUserCanceled(session)) return;
       if (failure) {
         this.patch(id, { status: "error", error: failure });
         return;
       }
 
-      await completeUpload(uploadId, controller.signal);
-      if (session.canceledByUser) return;
+      await withRetry(
+        () => completeUpload(uploadId, controller.signal),
+        this.chunkConfig.maxRetriesPerChunk,
+        this.chunkConfig.retryBaseDelayMs,
+        controller.signal,
+      );
+      // completeUpload가 예외 없이 끝났다는 건 서버가 이미 파일을 완성했다는
+      // 뜻이므로, 그 순간과 겹쳐 들어온 취소 요청이 있어도 성공으로 확정한다
+      // (서버 상태와 클라이언트 상태가 어긋나는 걸 막기 위함).
       this.patch(id, { status: "success", progress: 100 });
     } catch (err) {
-      if (session.canceledByUser) return;
+      if (isUserCanceled(session)) return;
       const message =
         err instanceof Error ? err.message : "업로드 중 오류가 발생했습니다.";
       this.patch(id, { status: "error", error: message });

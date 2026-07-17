@@ -24,6 +24,7 @@ export function useFileUpload() {
   );
   const cancel = useCallback((id: string) => manager.cancel(id), [manager]);
   const retry = useCallback((id: string) => manager.retry(id), [manager]);
+  const remove = useCallback((id: string) => manager.remove(id), [manager]);
 
-  return { files, addFiles, cancel, retry };
+  return { files, addFiles, cancel, retry, remove };
 }
