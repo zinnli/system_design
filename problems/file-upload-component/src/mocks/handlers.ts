@@ -1,15 +1,5 @@
 import { delay, http, HttpResponse } from "msw";
-
-/**
- * 데모용 네트워크 상태. UI의 "네트워크 시뮬레이션" 패널에서 직접 이 값을
- * 바꿔가며 재시도/에러 UI가 실제로 동작하는 모습을 시연할 수 있다.
- * (실제 서비스라면 서버가 알아서 결정할 값이라, 클라이언트 엔진 쪽 타입에는 넣지 않았다.)
- */
-export const networkSimulation = {
-  failureRatePercent: 10,
-  minLatencyMs: 150,
-  maxLatencyMs: 500,
-};
+import { networkSimulation } from "./networkSimulationConfig";
 
 function randomLatency(): number {
   const { minLatencyMs, maxLatencyMs } = networkSimulation;

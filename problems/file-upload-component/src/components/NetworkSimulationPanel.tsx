@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { networkSimulation } from "../mocks/handlers";
+import { networkSimulation } from "../mocks/networkSimulationConfig";
 
 /**
  * 데모 전용 패널. 실제 제품 코드였다면 존재할 이유가 없지만, 스터디에서
