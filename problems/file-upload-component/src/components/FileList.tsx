@@ -3,9 +3,9 @@ import { FileItem } from "./FileItem";
 
 interface FileListProps {
   files: UploadFileState[];
-  onCancel: (id: string) => void;
-  onRetry: (id: string) => void;
-  onRemove: (id: string) => void;
+  onCancel: (id: string) => () => void;
+  onRetry: (id: string) => () => void;
+  onRemove: (id: string) => () => void;
 }
 
 export function FileList({ files, onCancel, onRetry, onRemove }: FileListProps) {

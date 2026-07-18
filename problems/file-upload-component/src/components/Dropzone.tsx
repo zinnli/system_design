@@ -2,10 +2,12 @@ import { useCallback, useRef, useState } from "react";
 import type { ChangeEvent, DragEvent, KeyboardEvent } from "react";
 
 interface DropzoneProps {
-  onFilesSelected: (files: File[]) => void;
+  /** 파일 선택 input의 change 이벤트를 그대로 전달한다 (value 리셋은 훅 책임). */
+  onFilesAdd: (event: ChangeEvent<HTMLInputElement>) => void;
+  onFilesDrop: (files: File[]) => void;
 }
 
-export function Dropzone({ onFilesSelected }: DropzoneProps) {
+export function Dropzone({ onFilesAdd, onFilesDrop }: DropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -18,18 +20,9 @@ export function Dropzone({ onFilesSelected }: DropzoneProps) {
       event.preventDefault();
       setIsDragOver(false);
       const files = Array.from(event.dataTransfer.files);
-      if (files.length > 0) onFilesSelected(files);
+      if (files.length > 0) onFilesDrop(files);
     },
-    [onFilesSelected],
-  );
-
-  const handleInputChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(event.target.files ?? []);
-      if (files.length > 0) onFilesSelected(files);
-      event.target.value = "";
-    },
-    [onFilesSelected],
+    [onFilesDrop],
   );
 
   const handleKeyDown = useCallback(
@@ -69,7 +62,7 @@ export function Dropzone({ onFilesSelected }: DropzoneProps) {
         type="file"
         multiple
         hidden
-        onChange={handleInputChange}
+        onChange={onFilesAdd}
       />
     </div>
   );

@@ -2,20 +2,25 @@ import { useState } from "react";
 import { Dropzone } from "./components/Dropzone";
 import { FileList } from "./components/FileList";
 import { NetworkSimulationPanel } from "./components/NetworkSimulationPanel";
-import { useFileUpload } from "./hooks/useFileUpload";
+import useUploadFiles from "./hooks/useUploadFiles";
 
 export function App() {
-  const { files, addFiles, cancel, retry, remove } = useFileUpload();
   const [rejections, setRejections] = useState<
     { file: File; error: string }[]
   >([]);
 
-  const handleFilesSelected = (incoming: File[]) => {
-    setRejections(addFiles(incoming));
-  };
+  const {
+    isLoading,
+    uploadFiles,
+    handleFilesAdd,
+    handleFilesDrop,
+    handleFileCancel,
+    handleFileRetry,
+    handleFileRemove,
+  } = useUploadFiles({ onFilesRejected: setRejections });
 
   return (
-    <main className="app">
+    <main className="app" aria-busy={isLoading}>
       <h1>파일 업로드 컴포넌트</h1>
       <p className="app__subtitle">
         drag &amp; drop · 파일 검증 · 진행률 · 취소/재시도 · chunk 업로드
@@ -23,7 +28,7 @@ export function App() {
 
       <NetworkSimulationPanel />
 
-      <Dropzone onFilesSelected={handleFilesSelected} />
+      <Dropzone onFilesAdd={handleFilesAdd} onFilesDrop={handleFilesDrop} />
 
       {rejections.length > 0 && (
         <ul className="rejection-list">
@@ -35,7 +40,12 @@ export function App() {
         </ul>
       )}
 
-      <FileList files={files} onCancel={cancel} onRetry={retry} onRemove={remove} />
+      <FileList
+        files={uploadFiles}
+        onCancel={handleFileCancel}
+        onRetry={handleFileRetry}
+        onRemove={handleFileRemove}
+      />
     </main>
   );
 }

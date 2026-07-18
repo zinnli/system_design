@@ -38,7 +38,7 @@ src/
 ```
 
 업로드 로직(청크 분할, 동시성 제어, 재시도, 취소, 진행률 계산)을 `engine/`에 프레임워크
-독립적으로 두고, React는 `useFileUpload` 훅 하나로 구독만 한다. 그 덕에 엔진은 jsdom과
+독립적으로 두고, React는 `useUploadFiles` 훅 하나로 구독만 한다. 그 덕에 엔진은 jsdom과
 `fetch` mock만으로 React 없이 테스트할 수 있고(`UploadManager.test.ts` 등 28개 테스트),
 나중에 다른 UI 프레임워크나 Web Worker로 옮기는 것도 훅 하나만 새로 짜면 된다.
 
@@ -51,7 +51,9 @@ src/
 - `engine/uploadApi.ts` — `initUpload` / `uploadChunk` / `completeUpload` 3단계 REST 계약
 - `engine/UploadManager.ts` — 상태 저장소 + 오케스트레이터. `subscribe`/`getSnapshot`으로만
   외부에 상태를 노출하는 pub/sub 구조
-- `hooks/useFileUpload.ts` — `UploadManager`를 `useSyncExternalStore`로 구독. 로직 없음
+- `hooks/useUploadFiles.ts` — `UploadManager`를 `useSyncExternalStore`로 구독하는 어댑터.
+  input change 이벤트 처리(값 리셋 포함), 파일 이름순 정렬, 거부 목록 콜백(`onFilesRejected`),
+  외부 상태 동기화 콜백(`onFilesChange`)까지 담당. 업로드 로직 자체는 없음
 - `components/` — `Dropzone`, `ProgressBar`, `FileItem`, `FileList`,
   `NetworkSimulationPanel`(데모용 실패율 컨트롤)
 
@@ -69,10 +71,11 @@ queued → uploading → success
               └────→ canceled
 ```
 
-1. 사용자가 `Dropzone`에 파일을 드래그하거나 선택 → `App`이 `addFiles(files)` 호출
+1. 사용자가 `Dropzone`에 파일을 드래그하거나 선택 → 훅의 `handleFilesDrop`/`handleFilesAdd`가
+   받아 이름순으로 정렬한 뒤 엔진의 `addFiles`에 넘긴다 (input value 리셋도 훅이 처리)
 2. `UploadManager.addFiles`가 `validateFiles`로 검증한다. 통과한 파일만 `queued`로 등록하고
    (이때 `totalChunks`를 계산해 진행률 분모로 쓴다) 업로드를 시작하며, 거부된 파일은
-   `{file, error}` 목록으로 즉시 반환되어 화면에 표시된다
+   `{file, error}` 목록으로 반환되어 `onFilesRejected` 콜백을 통해 화면에 표시된다
 3. 파일별 업로드(`startUpload`):
    1. 세션 준비 — `chunkFile`로 파일을 5MB `Blob`으로 분할하고, 성공한 청크 인덱스를 담을
       `Set`(`doneIndexes`)과 이 파일의 모든 요청이 공유할 `AbortController`를 만든다
@@ -82,7 +85,7 @@ queued → uploading → success
    4. 각 청크는 실패 시 `withRetry`로 최대 3회 지수 백오프 재시도. 그래도 실패하면 해당
       파일의 `AbortController`를 중단시켜 남은 청크 요청까지 함께 정리하고 `error`로 전환
    5. 모든 청크가 끝나면 `completeUpload` 호출 후 `success`로 전환
-4. 상태가 바뀔 때마다 `UploadManager`가 `emit()` → `useFileUpload`가 `useSyncExternalStore`로
+4. 상태가 바뀔 때마다 `UploadManager`가 `emit()` → `useUploadFiles`가 `useSyncExternalStore`로
    리렌더를 트리거 → `FileList`/`FileItem`이 진행률과 상태를 반영
 5. **취소** — `cancel(id)`는 해당 파일의 `AbortController.abort()`를 호출해 in-flight 요청을
    즉시 끊고 상태를 `canceled`로 고정한다. 아직 시작 전인 `queued` 파일도 취소할 수 있다

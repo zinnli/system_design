@@ -22,9 +22,9 @@ const REMOVABLE_STATUSES = new Set<UploadStatus>(["success", "error", "canceled"
 
 interface FileItemProps {
   state: UploadFileState;
-  onCancel: (id: string) => void;
-  onRetry: (id: string) => void;
-  onRemove: (id: string) => void;
+  onCancel: (id: string) => () => void;
+  onRetry: (id: string) => () => void;
+  onRemove: (id: string) => () => void;
 }
 
 export function FileItem({ state, onCancel, onRetry, onRemove }: FileItemProps) {
@@ -53,17 +53,17 @@ export function FileItem({ state, onCancel, onRetry, onRemove }: FileItemProps) 
 
       <div className="file-item__actions">
         {(state.status === "uploading" || state.status === "queued") && (
-          <button type="button" onClick={() => onCancel(state.id)}>
+          <button type="button" onClick={onCancel(state.id)}>
             취소
           </button>
         )}
         {state.status === "error" && (
-          <button type="button" onClick={() => onRetry(state.id)}>
+          <button type="button" onClick={onRetry(state.id)}>
             재시도
           </button>
         )}
         {REMOVABLE_STATUSES.has(state.status) && (
-          <button type="button" onClick={() => onRemove(state.id)}>
+          <button type="button" onClick={onRemove(state.id)}>
             삭제
           </button>
         )}
