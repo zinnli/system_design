@@ -3,7 +3,7 @@ import { Dropzone } from "./components/Dropzone";
 import { FileList } from "./components/FileList";
 import { NetworkSimulationPanel } from "./components/NetworkSimulationPanel";
 import { RejectionList } from "./components/RejectionList";
-import type { RejectedFile } from "./engine/types";
+import type { RejectedFile } from "./utils/types";
 import useUploadFiles from "./hooks/useUploadFiles";
 
 export function App() {

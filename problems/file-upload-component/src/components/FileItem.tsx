@@ -1,6 +1,6 @@
-import { formatBytes } from "../engine/formatBytes";
-import type { UploadFileState, UploadStatus } from "../engine/types";
-import { TERMINAL_STATUSES } from "../engine/types";
+import { formatBytes } from "../utils/formatBytes";
+import type { UploadFileState, UploadStatus } from "../utils/types";
+import { TERMINAL_STATUSES } from "../utils/types";
 import { ProgressBar } from "./ProgressBar";
 
 const STATUS_LABEL: Record<UploadStatus, string> = {

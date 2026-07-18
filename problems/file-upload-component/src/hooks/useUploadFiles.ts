@@ -1,9 +1,9 @@
 import type { ChangeEvent } from "react";
 import { useCallback, useState, useSyncExternalStore } from "react";
 
-import type { RejectedFile, UploadFileState } from "../engine/types";
-import { UploadManager } from "../engine/UploadManager";
-import { DEFAULT_VALIDATION_CONFIG } from "../engine/validateFile";
+import type { RejectedFile, UploadFileState } from "../utils/types";
+import { UploadManager } from "../utils/UploadManager";
+import { DEFAULT_VALIDATION_CONFIG } from "../utils/validateFile";
 
 interface UseUploadFilesProps {
   /** 검증 설정 3종은 마운트 시점에 한 번 읽혀 고정된다 (이후 변경은 무시됨). */

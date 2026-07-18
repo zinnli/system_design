@@ -1,4 +1,4 @@
-import type { UploadFileState } from "../engine/types";
+import type { UploadFileState } from "../utils/types";
 import { FileItem } from "./FileItem";
 
 interface FileListProps {

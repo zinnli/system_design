@@ -1,4 +1,4 @@
-import type { RejectedFile } from "../engine/types";
+import type { RejectedFile } from "../utils/types";
 
 interface RejectionListProps {
   rejections: RejectedFile[];
