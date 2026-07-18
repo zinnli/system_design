@@ -13,9 +13,9 @@ export function formatBytes(bytes: number): string {
     Math.floor(Math.log(bytes) / Math.log(1024)),
     units.length - 1,
   );
-  const value = bytes / 1024 ** exponent;
-  const rounded = Math.round(value * 10) / 10;
-  return `${exponent === 0 ? rounded : rounded.toFixed(rounded % 1 === 0 ? 0 : 1)}${units[exponent]}`;
+  // 소수점 첫째 자리까지 반올림. 정수가 되면 소수점 없이 표기된다 (1KB, 1.5KB).
+  const rounded = Math.round((bytes / 1024 ** exponent) * 10) / 10;
+  return `${rounded}${units[exponent]}`;
 }
 
 function getExtension(filename: string): string {
