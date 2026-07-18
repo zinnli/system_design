@@ -1,22 +1,11 @@
-import type { ValidationConfig } from "./types";
+import { formatBytes } from "./formatBytes";
+import type { RejectedFile, ValidationConfig } from "./types";
 
 export const DEFAULT_VALIDATION_CONFIG: ValidationConfig = {
   maxFileSizeBytes: 2 * 1024 * 1024 * 1024, // 2GB
   allowedExtensions: [],
   maxFiles: 10,
 };
-
-export function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0B";
-  const units = ["B", "KB", "MB", "GB"];
-  const exponent = Math.min(
-    Math.floor(Math.log(bytes) / Math.log(1024)),
-    units.length - 1,
-  );
-  // 소수점 첫째 자리까지 반올림. 정수가 되면 소수점 없이 표기된다 (1KB, 1.5KB).
-  const rounded = Math.round((bytes / 1024 ** exponent) * 10) / 10;
-  return `${rounded}${units[exponent]}`;
-}
 
 function getExtension(filename: string): string {
   const idx = filename.lastIndexOf(".");
@@ -45,7 +34,7 @@ export function validateFile(
 
 export interface BatchValidationResult {
   accepted: File[];
-  rejected: { file: File; error: string }[];
+  rejected: RejectedFile[];
 }
 
 /**
@@ -58,7 +47,7 @@ export function validateFiles(
   config: ValidationConfig,
 ): BatchValidationResult {
   const accepted: File[] = [];
-  const rejected: { file: File; error: string }[] = [];
+  const rejected: RejectedFile[] = [];
   const seenInBatch = new Set<string>();
 
   for (const file of incoming) {

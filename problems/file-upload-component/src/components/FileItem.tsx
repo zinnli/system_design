@@ -1,5 +1,6 @@
+import { formatBytes } from "../engine/formatBytes";
 import type { UploadFileState, UploadStatus } from "../engine/types";
-import { formatBytes } from "../engine/validateFile";
+import { TERMINAL_STATUSES } from "../engine/types";
 import { ProgressBar } from "./ProgressBar";
 
 const STATUS_LABEL: Record<UploadStatus, string> = {
@@ -17,8 +18,6 @@ const STATUS_TONE: Record<UploadStatus, "normal" | "success" | "error"> = {
   error: "error",
   canceled: "normal",
 };
-
-const REMOVABLE_STATUSES = new Set<UploadStatus>(["success", "error", "canceled"]);
 
 interface FileItemProps {
   state: UploadFileState;
@@ -62,7 +61,7 @@ export function FileItem({ state, onCancel, onRetry, onRemove }: FileItemProps) 
             재시도
           </button>
         )}
-        {REMOVABLE_STATUSES.has(state.status) && (
+        {TERMINAL_STATUSES.has(state.status) && (
           <button type="button" onClick={onRemove(state.id)}>
             삭제
           </button>

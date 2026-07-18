@@ -42,8 +42,9 @@ src/
 `fetch` mock만으로 React 없이 테스트할 수 있고(`UploadManager.test.ts` 등 28개 테스트),
 나중에 다른 UI 프레임워크나 Web Worker로 옮기는 것도 훅 하나만 새로 짜면 된다.
 
-- `engine/types.ts` — `UploadFileState`, `ValidationConfig`, `ChunkUploadConfig`
+- `engine/types.ts` — `UploadFileState`, `RejectedFile`, `ValidationConfig`, `ChunkUploadConfig`
 - `engine/validateFile.ts` — 크기/확장자/중복/개수 검증
+- `engine/formatBytes.ts` — 바이트 수를 사람이 읽기 좋은 문자열로 변환 (에러 문구·UI 공용)
 - `engine/chunkFile.ts` — `File`을 고정 크기 `Blob`으로 분할 (`Blob.slice`는 데이터를
   복사하지 않고 참조 범위만 기록하므로 파일이 커도 이 시점엔 메모리 부담이 없다)
 - `engine/ConcurrencyPool.ts` — 세마포어. 파일 단위가 아니라 **전체 청크가 공유**한다
@@ -54,7 +55,9 @@ src/
 - `hooks/useUploadFiles.ts` — `UploadManager`를 `useSyncExternalStore`로 구독하는 어댑터.
   input change 이벤트 처리(값 리셋 포함), 파일 이름순 정렬, 거부 목록 콜백(`onFilesRejected`),
   외부 상태 동기화 콜백(`onFilesChange`)까지 담당. 업로드 로직 자체는 없음
-- `components/` — `Dropzone`, `ProgressBar`, `FileItem`, `FileList`,
+- `hooks/useDragDropFiles.ts` — ref를 붙인 요소를 drag & drop 영역으로 만드는 훅.
+  하이라이트용 `isDragging` 상태를 관리하고 드롭된 파일 목록을 콜백으로 전달
+- `components/` — `Dropzone`, `ProgressBar`, `FileItem`, `FileList`, `RejectionList`,
   `NetworkSimulationPanel`(데모용 실패율 컨트롤)
 
 ## 데이터 흐름

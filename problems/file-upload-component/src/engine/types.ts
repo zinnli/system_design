@@ -5,6 +5,16 @@ export type UploadStatus =
   | "error"
   | "canceled";
 
+/**
+ * 더 이상 진행되지 않는 종결 상태. 엔진은 이 상태에서만 remove를 허용하고,
+ * UI는 같은 기준으로 삭제 버튼을 노출한다 — 한 곳에서 정의해 어긋나지 않게 한다.
+ */
+export const TERMINAL_STATUSES: ReadonlySet<UploadStatus> = new Set([
+  "success",
+  "error",
+  "canceled",
+]);
+
 export interface UploadFileState {
   id: string;
   file: File;
@@ -17,6 +27,12 @@ export interface UploadFileState {
   /** 재시도 가능한 실패인지, 사용자가 취소했는지 구분 */
   error: string | null;
   attempt: number;
+}
+
+/** 검증에서 거부된 파일과 그 사유. */
+export interface RejectedFile {
+  file: File;
+  error: string;
 }
 
 export interface ValidationConfig {

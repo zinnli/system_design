@@ -1,7 +1,13 @@
 import { ConcurrencyPool } from "./ConcurrencyPool";
 import { DEFAULT_CHUNK_CONFIG } from "./config";
 import { chunkFile } from "./chunkFile";
-import type { ChunkUploadConfig, UploadFileState, ValidationConfig } from "./types";
+import type {
+  ChunkUploadConfig,
+  RejectedFile,
+  UploadFileState,
+  ValidationConfig,
+} from "./types";
+import { TERMINAL_STATUSES } from "./types";
 import { completeUpload, initUpload, uploadChunk } from "./uploadApi";
 import { DEFAULT_VALIDATION_CONFIG, validateFiles } from "./validateFile";
 import { withRetry } from "./withRetry";
@@ -21,12 +27,6 @@ interface UploadSession {
   doneIndexes: Set<number>;
   uploadId?: string;
 }
-
-const TERMINAL_STATUSES: ReadonlySet<UploadFileState["status"]> = new Set([
-  "success",
-  "error",
-  "canceled",
-]);
 
 function isUserCanceled(session: UploadSession): boolean {
   const { signal } = session.controller;
@@ -78,7 +78,7 @@ export class UploadManager {
   // ───────────────────────── 공개 명령 ─────────────────────────
 
   /** 파일을 검증해 통과한 것만 등록·업로드하고, 거부된 파일은 사유와 함께 반환한다. */
-  addFiles(incoming: File[]): { rejected: { file: File; error: string }[] } {
+  addFiles(incoming: File[]): { rejected: RejectedFile[] } {
     const existingNames = new Set(
       Array.from(this.files.values()).map((f) => f.file.name),
     );

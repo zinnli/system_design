@@ -2,12 +2,12 @@ import { useState } from "react";
 import { Dropzone } from "./components/Dropzone";
 import { FileList } from "./components/FileList";
 import { NetworkSimulationPanel } from "./components/NetworkSimulationPanel";
+import { RejectionList } from "./components/RejectionList";
+import type { RejectedFile } from "./engine/types";
 import useUploadFiles from "./hooks/useUploadFiles";
 
 export function App() {
-  const [rejections, setRejections] = useState<
-    { file: File; error: string }[]
-  >([]);
+  const [rejections, setRejections] = useState<RejectedFile[]>([]);
 
   const {
     isLoading,
@@ -30,15 +30,7 @@ export function App() {
 
       <Dropzone onFilesAdd={handleFilesAdd} onFilesDrop={handleFilesDrop} />
 
-      {rejections.length > 0 && (
-        <ul className="rejection-list">
-          {rejections.map(({ file, error }, index) => (
-            <li key={`${index}-${file.name}`}>
-              <strong>{file.name}</strong>: {error}
-            </li>
-          ))}
-        </ul>
-      )}
+      <RejectionList rejections={rejections} />
 
       <FileList
         files={uploadFiles}

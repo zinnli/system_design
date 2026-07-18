@@ -1,11 +1,12 @@
 import type { ChangeEvent } from "react";
 import { useCallback, useState, useSyncExternalStore } from "react";
 
-import type { UploadFileState } from "../engine/types";
+import type { RejectedFile, UploadFileState } from "../engine/types";
 import { UploadManager } from "../engine/UploadManager";
 import { DEFAULT_VALIDATION_CONFIG } from "../engine/validateFile";
 
 interface UseUploadFilesProps {
+  /** 검증 설정 3종은 마운트 시점에 한 번 읽혀 고정된다 (이후 변경은 무시됨). */
   maxFileCount?: number;
   maxFileSizeBytes?: number;
   allowedExtensions?: string[];
@@ -14,7 +15,7 @@ interface UseUploadFilesProps {
    * 원하는 방식으로 노출한다. 거부가 없으면 빈 배열로 호출되어
    * 이전 에러 표시를 지울 수 있다.
    */
-  onFilesRejected?: (rejected: { file: File; error: string }[]) => void;
+  onFilesRejected?: (rejected: RejectedFile[]) => void;
   /**
    * 파일이 추가·삭제될 때마다 최신 목록을 받는다. react-hook-form의
    * setValue처럼 외부 상태를 동기화하는 용도 (진행률 변화마다 불리지 않는다).
