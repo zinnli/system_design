@@ -1,18 +1,24 @@
+import axios, { isAxiosError, type AxiosProgressEvent } from "axios";
+
 export interface InitUploadResponse {
   uploadId: string;
 }
 
-/** fetch 후 실패 응답이면 단계별 메시지에 status를 붙여 던진다. */
-async function request(
-  url: string,
-  init: RequestInit,
-  failMessage: string,
-): Promise<Response> {
-  const response = await fetch(url, init);
-  if (!response.ok) {
-    throw new Error(`${failMessage} (status ${response.status})`);
+export type UploadProgressHandler = (event: AxiosProgressEvent) => void;
+
+const api = axios.create();
+
+/**
+ * axios 에러를 단계별 한국어 메시지로 바꿔 다시 던진다.
+ * 취소(ERR_CANCELED)는 에러 메시지로 변환하지 않고 그대로 통과시킨다 —
+ * uploadManager가 abort reason으로 "사용자 취소"를 판별하기 때문.
+ */
+function throwStageError(err: unknown, failMessage: string): never {
+  if (isAxiosError(err) && err.code !== "ERR_CANCELED") {
+    const status = err.response ? ` (status ${err.response.status})` : "";
+    throw new Error(`${failMessage}${status}`);
   }
-  return response;
+  throw err;
 }
 
 /**
@@ -23,17 +29,16 @@ export async function initUpload(
   file: File,
   signal: AbortSignal,
 ): Promise<InitUploadResponse> {
-  const response = await request(
-    "/api/uploads",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fileName: file.name, fileSize: file.size }),
-      signal,
-    },
-    "업로드 초기화에 실패했습니다.",
-  );
-  return response.json();
+  try {
+    const { data } = await api.post<InitUploadResponse>(
+      "/api/uploads",
+      { fileName: file.name, fileSize: file.size },
+      { signal },
+    );
+    return data;
+  } catch (err) {
+    throwStageError(err, "업로드 초기화에 실패했습니다.");
+  }
 }
 
 /** 청크 하나를 업로드한다. 서버는 (uploadId, index) 기준으로 upsert하므로 재시도해도 안전하다. */
@@ -42,12 +47,17 @@ export async function uploadChunk(
   index: number,
   chunk: Blob,
   signal: AbortSignal,
+  onUploadProgress?: UploadProgressHandler,
 ): Promise<void> {
-  await request(
-    `/api/uploads/${uploadId}/chunks/${index}`,
-    { method: "PUT", body: chunk, signal },
-    "청크 업로드에 실패했습니다.",
-  );
+  try {
+    await api.put(`/api/uploads/${uploadId}/chunks/${index}`, chunk, {
+      signal,
+      headers: { "Content-Type": "application/octet-stream" },
+      onUploadProgress,
+    });
+  } catch (err) {
+    throwStageError(err, "청크 업로드에 실패했습니다.");
+  }
 }
 
 /** 모든 청크 업로드가 끝났음을 서버에 알려 파일을 조립하게 한다. */
@@ -55,9 +65,9 @@ export async function completeUpload(
   uploadId: string,
   signal: AbortSignal,
 ): Promise<void> {
-  await request(
-    `/api/uploads/${uploadId}/complete`,
-    { method: "POST", signal },
-    "업로드 완료 처리에 실패했습니다.",
-  );
+  try {
+    await api.post(`/api/uploads/${uploadId}/complete`, null, { signal });
+  } catch (err) {
+    throwStageError(err, "업로드 완료 처리에 실패했습니다.");
+  }
 }

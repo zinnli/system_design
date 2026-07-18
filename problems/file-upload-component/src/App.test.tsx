@@ -1,33 +1,17 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
-function requestUrl(input: RequestInfo | URL): string {
-  return typeof input === "string" ? input : input.toString();
-}
+// 네트워크 계층(axios)은 uploadApi 모듈 mock으로 대체한다.
+vi.mock("./utils/uploadApi", () => ({
+  initUpload: vi.fn(async () => ({ uploadId: "u1" })),
+  uploadChunk: vi.fn(async () => {}),
+  completeUpload: vi.fn(async () => {}),
+}));
 
 describe("App", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
   it("파일을 선택하면 업로드가 진행되어 완료 상태로 표시된다", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = requestUrl(input);
-        const method = init?.method ?? "GET";
-        if (method === "POST" && url === "/api/uploads") {
-          return new Response(JSON.stringify({ uploadId: "u1" }), {
-            status: 200,
-          });
-        }
-        if (method === "PUT") return new Response(null, { status: 204 });
-        return new Response(null, { status: 200 });
-      }),
-    );
-
     const { container } = render(<App />);
     const input = container.querySelector(
       'input[type="file"]',

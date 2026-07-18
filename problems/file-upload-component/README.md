@@ -61,8 +61,8 @@ utils/       uploadManager, uploadApi, validateFile, chunkFile, withRetry, concu
 
 업로드 로직 전체를 React 밖(`utils/`)에 둔 이유는 세 가지입니다.
 
-- **테스트** — "동시 업로드 중 취소" 같은 까다로운 로직을 fetch mock만으로 검증할 수
-  있습니다 (React 없이 도는 테스트 28개).
+- **테스트** — "동시 업로드 중 취소" 같은 까다로운 로직을 네트워크 계층(`uploadApi`)
+  mock만으로 검증할 수 있습니다 (React 없이 도는 테스트 28개).
 - **설명 가능성** — 상태 전이가 `createUploadManager` 함수 하나에 모여 있어 위에서
   아래로 읽힙니다.
 - **이식성** — 다른 프레임워크나 Web Worker로 옮겨도 훅만 새로 짜면 됩니다.
@@ -93,8 +93,10 @@ queued → uploading → success
 검증에서 거부된 파일은 상태로 만들지 않고 `{file, error}` 목록으로 콜백에 넘겨,
 토스트든 인라인 목록이든 호출부가 노출 방식을 정하게 했습니다.
 
-진행률은 청크가 완료될 때마다 갱신합니다. `fetch`는 바이트 단위 업로드 진행 이벤트가
-없지만, 5MB 단위면 progress bar가 충분히 매끄럽게 움직입니다.
+진행률은 기본적으로 청크가 완료될 때마다 갱신합니다. 네트워크 계층은 axios라서
+`uploadApi.uploadChunk`에 전달한 `onUploadProgress` 콜백으로 바이트 단위 진행률도
+받을 수 있습니다. 다만 현재 UI는 5MB 청크 단위 갱신만으로도 progress bar가 충분히
+매끄럽게 움직여서 상태 모델을 단순하게 유지했습니다.
 
 ```ts
 doneIndexes.add(index); // 성공한 청크 인덱스 Set
@@ -173,8 +175,10 @@ controller.abort();                     // 청크 영구 실패로 인한 내부
 
 - 청크 재시도·재개 전략은 서버의 멱등성(upsert) 보장이 전제입니다. 계약을 먼저
   확인해야 합니다.
-- `fetch`는 업로드 진행 이벤트가 없습니다. 바이트 단위 진행률이 꼭 필요하면 XHR을
-  쓰거나, 청크를 잘게 쪼개는 것으로 절충합니다.
+- `fetch`는 업로드 방향의 바이트 단위 진행 이벤트가 없습니다. 이 프로젝트는 axios를
+  씁니다. axios의 `onUploadProgress`는 내부적으로 XHR의 progress 이벤트를 감싼 것이라
+  바이트 단위 진행률이 가능하고, `signal` 옵션으로 `AbortController` 연동도 됩니다.
+  fetch로 가려면 청크를 잘게 쪼개 청크 단위 진행률로 절충해야 합니다.
 - 동시성 풀은 파일별이 아니라 전역으로 두어야 파일 수와 무관하게 네트워크 사용량이
   예측 가능합니다.
 - 취소·실패 시 남은 in-flight 요청을 정리하지 않으면 대역폭이 새고 상태가 꼬입니다.

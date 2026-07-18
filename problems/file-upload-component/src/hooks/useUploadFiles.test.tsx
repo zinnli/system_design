@@ -1,40 +1,20 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import useUploadFiles from "./useUploadFiles";
+
+// 네트워크 계층(axios)은 uploadApi 모듈 mock으로 대체한다.
+vi.mock("../utils/uploadApi", () => ({
+  initUpload: vi.fn(async () => ({ uploadId: "u1" })),
+  uploadChunk: vi.fn(async () => {}),
+  completeUpload: vi.fn(async () => {}),
+}));
 
 function makeFile(name: string, sizeBytes: number): File {
   return new File([new Uint8Array(sizeBytes)], name);
 }
 
-function requestUrl(input: RequestInfo | URL): string {
-  return typeof input === "string" ? input : input.toString();
-}
-
-function stubUploadApi() {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      const method = init?.method ?? "GET";
-      if (method === "POST" && url === "/api/uploads") {
-        return new Response(JSON.stringify({ uploadId: "u1" }), {
-          status: 200,
-        });
-      }
-      if (method === "PUT") return new Response(null, { status: 204 });
-      return new Response(null, { status: 200 });
-    }),
-  );
-}
-
 describe("useUploadFiles", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
   it("파일을 추가하면 목록에 반영되고 업로드가 진행되어 성공한다", async () => {
-    stubUploadApi();
-
     const { result } = renderHook(() => useUploadFiles());
 
     act(() => {
@@ -50,8 +30,6 @@ describe("useUploadFiles", () => {
   });
 
   it("추가된 파일은 이름순으로 정렬되어 등록된다", async () => {
-    stubUploadApi();
-
     const { result } = renderHook(() => useUploadFiles());
 
     act(() => {
@@ -88,8 +66,6 @@ describe("useUploadFiles", () => {
   });
 
   it("파일 추가·삭제 시 onFilesChange로 최신 목록이 전달된다", async () => {
-    stubUploadApi();
-
     const onFilesChange = vi.fn();
     const { result } = renderHook(() => useUploadFiles({ onFilesChange }));
 
@@ -98,7 +74,9 @@ describe("useUploadFiles", () => {
     });
     expect(onFilesChange).toHaveBeenLastCalledWith(
       expect.arrayContaining([
-        expect.objectContaining({ file: expect.objectContaining({ name: "a.txt" }) }),
+        expect.objectContaining({
+          file: expect.objectContaining({ name: "a.txt" }),
+        }),
       ]),
     );
 
