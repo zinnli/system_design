@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 import { UploadManager } from "../engine/UploadManager";
 
 /**
@@ -7,7 +7,9 @@ import { UploadManager } from "../engine/UploadManager";
  * 이 훅은 React 렌더 사이클에 엔진 상태를 연결하는 역할만 한다.
  */
 export function useFileUpload() {
-  const manager = useMemo(() => new UploadManager(), []);
+  // useMemo는 캐시일 뿐 인스턴스 유지를 보장하지 않는다(React가 버릴 수 있음).
+  // useState 초기값은 컴포넌트 수명 동안 유지가 보장되므로 이쪽을 쓴다.
+  const [manager] = useState(() => new UploadManager());
 
   const subscribe = useCallback(
     (onStoreChange: () => void) => manager.subscribe(onStoreChange),

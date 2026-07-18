@@ -144,6 +144,23 @@ describe("UploadManager", () => {
     expect(findState(manager, id)?.status).toBe("canceled");
   });
 
+  it("queued 상태에서 cancel하면 업로드가 아예 시작되지 않는다", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const manager = new UploadManager(validationConfig, chunkConfig);
+    manager.addFiles([makeFile("i.bin", 25)]);
+    const id = manager.getSnapshot()[0]!.id;
+
+    // startUpload는 microtask로 예약된다 — 실행되기 전에 취소한다.
+    manager.cancel(id);
+    expect(findState(manager, id)?.status).toBe("canceled");
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(findState(manager, id)?.status).toBe("canceled");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("retry는 이미 성공한 청크를 다시 업로드하지 않는다", async () => {
     let chunk1ShouldFail = true;
     const putCalls: string[] = [];

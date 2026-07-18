@@ -104,9 +104,12 @@ export class UploadManager {
   }
 
   cancel(id: string): void {
-    const session = this.sessions.get(id);
-    if (!session) return;
-    session.controller.abort(USER_CANCEL_REASON);
+    const state = this.files.get(id);
+    if (!state || TERMINAL_STATUSES.has(state.status)) return;
+    // queued 상태면 세션이 아직 없을 수 있다(startUpload는 microtask로 지연됨).
+    // 그 경우 abort할 대상이 없지만, startUpload가 시작 시점에 status를 보고
+    // canceled면 그대로 포기하므로 상태만 바꿔도 취소가 성립한다.
+    this.sessions.get(id)?.controller.abort(USER_CANCEL_REASON);
     this.patch(id, { status: "canceled" });
   }
 
@@ -150,6 +153,9 @@ export class UploadManager {
   private getOrCreateSession(id: string, file: File): UploadSession {
     const existing = this.sessions.get(id);
     if (existing) {
+      // 재시도 경로: 이전 시도에서 abort된 controller는 재사용할 수 없으므로
+      // 새로 발급한다. chunks/doneIndexes/uploadId는 그대로 유지해 이미 성공한
+      // 청크를 건너뛰고 이어서 올릴 수 있게 한다.
       existing.controller = new AbortController();
       return existing;
     }
@@ -162,31 +168,52 @@ export class UploadManager {
     return created;
   }
 
+  /** chunkConfig의 재시도 횟수·백오프 설정을 적용해 withRetry를 호출한다. */
+  private callWithRetry<T>(
+    fn: () => Promise<T>,
+    signal: AbortSignal,
+  ): Promise<T> {
+    return withRetry(
+      fn,
+      this.chunkConfig.maxRetriesPerChunk,
+      this.chunkConfig.retryBaseDelayMs,
+      signal,
+    );
+  }
+
+  /**
+   * 세션에 uploadId가 없으면 서버에서 발급받아 저장한다. 수동 재시도 시에는
+   * 기존 uploadId를 재사용해, 이전 시도에서 올라간 청크가 서버에 유지된다.
+   */
+  private async ensureUploadId(
+    session: UploadSession,
+    file: File,
+    signal: AbortSignal,
+  ): Promise<string> {
+    if (session.uploadId !== undefined) return session.uploadId;
+    const { uploadId } = await this.callWithRetry(
+      () => initUpload(file, signal),
+      signal,
+    );
+    session.uploadId = uploadId;
+    return uploadId;
+  }
+
   private async startUpload(id: string): Promise<void> {
     const state = this.files.get(id);
-    if (!state) return;
+    // addFiles/retry가 microtask로 예약한 시작 시점 이전에 파일이 취소·삭제될
+    // 수 있다. queued가 아니면 시작하지 않는다.
+    if (!state || state.status !== "queued") return;
 
     const session = this.getOrCreateSession(id, state.file);
     const { controller, chunks, doneIndexes } = session;
+    const { signal } = controller;
 
     this.patch(id, { status: "uploading", error: null });
 
     try {
-      if (!session.uploadId) {
-        const { uploadId } = await withRetry(
-          () => initUpload(state.file, controller.signal),
-          this.chunkConfig.maxRetriesPerChunk,
-          this.chunkConfig.retryBaseDelayMs,
-          controller.signal,
-        );
-        session.uploadId = uploadId;
-      }
-      const uploadId = session.uploadId;
-      if (!uploadId) {
-        throw new Error("업로드 세션 생성에 실패했습니다.");
-      }
+      const uploadId = await this.ensureUploadId(session, state.file, signal);
 
-      let failure: string | null = null;
       const remaining = chunks
         .map((_, index) => index)
         .filter((index) => !doneIndexes.has(index));
@@ -201,24 +228,19 @@ export class UploadManager {
       await Promise.all(
         remaining.map((index) =>
           this.pool.run(async () => {
-            if (failure || controller.signal.aborted) return;
+            // 취소되었거나 앞선 청크가 영구 실패한 파일의 남은 청크는 건너뛴다.
+            if (signal.aborted) return;
             try {
-              await withRetry(
-                () => uploadChunk(uploadId, index, chunks[index]!, controller.signal),
-                this.chunkConfig.maxRetriesPerChunk,
-                this.chunkConfig.retryBaseDelayMs,
-                controller.signal,
+              await this.callWithRetry(
+                () => uploadChunk(uploadId, index, chunks[index]!, signal),
+                signal,
               );
             } catch (err) {
-              if (!failure && !controller.signal.aborted) {
-                failure =
-                  err instanceof Error
-                    ? err.message
-                    : "청크 업로드에 실패했습니다.";
-                // 이 파일에 속한 나머지 진행 중인 청크 요청도 함께 중단한다.
-                controller.abort();
-              }
-              return;
+              // 같은 파일의 in-flight 청크 요청을 함께 중단시키고 실패를
+              // 위로 던진다. Promise.all은 가장 먼저 발생한 실패(= abort로
+              // 파생된 AbortError가 아니라 원인이 된 실제 에러)로 reject된다.
+              controller.abort();
+              throw err;
             }
             doneIndexes.add(index);
             uploadedBytes += chunks[index]?.size ?? 0;
@@ -231,23 +253,17 @@ export class UploadManager {
         ),
       );
 
+      // in-flight 요청 없이 취소된 경우(모든 청크 태스크가 조용히 건너뜀)는
+      // 예외가 발생하지 않으므로 여기서 한 번 더 확인한다.
       if (isUserCanceled(session)) return;
-      if (failure) {
-        this.patch(id, { status: "error", error: failure });
-        return;
-      }
 
-      await withRetry(
-        () => completeUpload(uploadId, controller.signal),
-        this.chunkConfig.maxRetriesPerChunk,
-        this.chunkConfig.retryBaseDelayMs,
-        controller.signal,
-      );
+      await this.callWithRetry(() => completeUpload(uploadId, signal), signal);
       // completeUpload가 예외 없이 끝났다는 건 서버가 이미 파일을 완성했다는
       // 뜻이므로, 그 순간과 겹쳐 들어온 취소 요청이 있어도 성공으로 확정한다
       // (서버 상태와 클라이언트 상태가 어긋나는 걸 막기 위함).
       this.patch(id, { status: "success", progress: 100 });
     } catch (err) {
+      // 사용자 취소는 에러가 아니다 — cancel()이 이미 canceled로 바꿔 두었다.
       if (isUserCanceled(session)) return;
       const message =
         err instanceof Error ? err.message : "업로드 중 오류가 발생했습니다.";

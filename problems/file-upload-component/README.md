@@ -39,7 +39,7 @@ src/
 
 업로드 로직(청크 분할, 동시성 제어, 재시도, 취소, 진행률 계산)을 `engine/`에 프레임워크
 독립적으로 두고, React는 `useFileUpload` 훅 하나로 구독만 한다. 그 덕에 엔진은 jsdom과
-`fetch` mock만으로 React 없이 테스트할 수 있고(`UploadManager.test.ts` 등 23개 테스트),
+`fetch` mock만으로 React 없이 테스트할 수 있고(`UploadManager.test.ts` 등 28개 테스트),
 나중에 다른 UI 프레임워크나 Web Worker로 옮기는 것도 훅 하나만 새로 짜면 된다.
 
 - `engine/types.ts` — `UploadFileState`, `ValidationConfig`, `ChunkUploadConfig`
@@ -57,23 +57,44 @@ src/
 
 ## 데이터 흐름
 
+한 줄 요약: **순수 TS 엔진(`UploadManager`)이 상태와 네트워크를 소유하고 React는 구독만
+한다. 실패는 "자동 3회 재시도 → 영구 실패(`error`) → 이어올리기 수동 재시도"의 2단 구조,
+취소는 파일당 `AbortController` 하나로 전파한다.**
+
+파일 하나의 상태는 5개다:
+
+```
+queued → uploading → success
+              ├────→ error ──(수동 retry)──→ queued로 복귀
+              └────→ canceled
+```
+
 1. 사용자가 `Dropzone`에 파일을 드래그하거나 선택 → `App`이 `addFiles(files)` 호출
 2. `UploadManager.addFiles`가 `validateFiles`로 검증한다. 통과한 파일만 `queued`로 등록하고
-   업로드를 시작하며, 거부된 파일은 `{file, error}` 목록으로 즉시 반환되어 화면에 표시된다
+   (이때 `totalChunks`를 계산해 진행률 분모로 쓴다) 업로드를 시작하며, 거부된 파일은
+   `{file, error}` 목록으로 즉시 반환되어 화면에 표시된다
 3. 파일별 업로드(`startUpload`):
-   1. `initUpload`로 서버에서 `uploadId` 발급
-   2. `chunkFile`로 5MB 단위 `Blob`으로 분할 (`totalChunks`를 진행률 분모로 미리 계산)
-   3. 아직 끝나지 않은 청크 인덱스만 `ConcurrencyPool`(기본 동시 4개)에 태워 업로드
+   1. 세션 준비 — `chunkFile`로 파일을 5MB `Blob`으로 분할하고, 성공한 청크 인덱스를 담을
+      `Set`(`doneIndexes`)과 이 파일의 모든 요청이 공유할 `AbortController`를 만든다
+   2. `initUpload`로 서버에서 `uploadId` 발급 (재시도 시에는 세션에 남은 기존 id를 재사용)
+   3. 아직 끝나지 않은 청크만 `ConcurrencyPool`(기본 동시 4개)에 태워 업로드. 청크 하나가
+      끝날 때마다 `doneIndexes`에 기록하고 진행률을 갱신한다
    4. 각 청크는 실패 시 `withRetry`로 최대 3회 지수 백오프 재시도. 그래도 실패하면 해당
       파일의 `AbortController`를 중단시켜 남은 청크 요청까지 함께 정리하고 `error`로 전환
    5. 모든 청크가 끝나면 `completeUpload` 호출 후 `success`로 전환
 4. 상태가 바뀔 때마다 `UploadManager`가 `emit()` → `useFileUpload`가 `useSyncExternalStore`로
    리렌더를 트리거 → `FileList`/`FileItem`이 진행률과 상태를 반영
 5. **취소** — `cancel(id)`는 해당 파일의 `AbortController.abort()`를 호출해 in-flight 요청을
-   즉시 끊고 상태를 `canceled`로 고정한다
-6. **재시도** — `retry(id)`는 처음부터 다시 올리지 않는다. 이미 성공한 청크 인덱스를 담은
-   `Set`(`doneIndexes`)을 기준으로 남은 청크부터 이어간다. 동시 업로드라 완료 순서가 섞여도
+   즉시 끊고 상태를 `canceled`로 고정한다. 아직 시작 전인 `queued` 파일도 취소할 수 있다
+   (`startUpload`가 시작 시점에 상태를 확인하고 `queued`가 아니면 시작하지 않는다).
+   단, `completeUpload`가 이미 성공한 뒤에 취소가 겹치면 서버에는 파일이 완성돼 있으므로
+   `success`로 확정한다 — 서버와 클라이언트 상태가 어긋나는 것을 막기 위한 선택이다
+6. **재시도** — `retry(id)`는 처음부터 다시 올리지 않는다. 세션에 남아 있는 `uploadId`와
+   `doneIndexes`를 재사용해 남은 청크부터 이어간다. 동시 업로드라 완료 순서가 섞여도
    Set 기반이라 정확히 재개된다
+7. **삭제** — `remove(id)`는 종결 상태(success/error/canceled)에서만 동작한다. 업로드 중인
+   파일은 먼저 취소해야 하며, 삭제 시 세션(청크 `Blob` 목록, `doneIndexes`)도 함께 해제되어
+   메모리에 쌓이지 않는다
 
 ## 성능/에러 처리
 
@@ -91,8 +112,8 @@ src/
 - **진행률 granularity** — 청크 완료 시점마다 `uploadedBytes`를 갱신한다. 청크 내부의
   바이트 단위 진행률까지는 주지 않지만, 청크 크기를 5MB로 잡아 progress bar가 충분히
   매끄럽게 움직인다 (아래 트레이드오프 참고)
-- **에러 메시지 구분** — 검증 실패/네트워크 실패/서버 실패를 각각 다른 문구로 노출해
-  사용자가 원인을 구분할 수 있게 했다
+- **에러 메시지 구분** — 검증 실패/초기화 실패/청크 실패/완료 실패를 단계별로 다른 문구
+  (status 코드 포함)로 노출해 사용자가 어느 단계에서 왜 실패했는지 구분할 수 있게 했다
 
 ## 트레이드오프
 
