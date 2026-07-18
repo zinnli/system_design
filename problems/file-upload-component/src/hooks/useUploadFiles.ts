@@ -1,9 +1,9 @@
 import type { ChangeEvent } from "react";
 import { useCallback, useState, useSyncExternalStore } from "react";
 
+import { DEFAULT_VALIDATION_CONFIG } from "../utils/config";
 import type { RejectedFile, UploadFileState } from "../utils/types";
-import { UploadManager } from "../utils/UploadManager";
-import { DEFAULT_VALIDATION_CONFIG } from "../utils/validateFile";
+import { createUploadManager } from "../utils/uploadManager";
 
 interface UseUploadFilesProps {
   /** 검증 설정 3종은 마운트 시점에 한 번 읽혀 고정된다 (이후 변경은 무시됨). */
@@ -36,13 +36,12 @@ const useUploadFiles = ({
   onFilesChange,
 }: UseUploadFilesProps = {}) => {
   // useState 초기값은 컴포넌트 수명 동안 유지가 보장된다 (useMemo는 캐시일 뿐).
-  const [manager] = useState(
-    () =>
-      new UploadManager({
-        maxFiles: maxFileCount,
-        maxFileSizeBytes,
-        allowedExtensions,
-      }),
+  const [manager] = useState(() =>
+    createUploadManager({
+      maxFiles: maxFileCount,
+      maxFileSizeBytes,
+      allowedExtensions,
+    }),
   );
 
   const subscribe = useCallback(

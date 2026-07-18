@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { UploadManager } from "./UploadManager";
+import type { UploadManager } from "./uploadManager";
+import { createUploadManager } from "./uploadManager";
 
 function makeFile(name: string, sizeBytes: number): File {
   return new File([new Uint8Array(sizeBytes)], name);
@@ -67,7 +68,7 @@ describe("UploadManager", () => {
       }),
     );
 
-    const manager = new UploadManager(validationConfig, chunkConfig);
+    const manager = createUploadManager(validationConfig, chunkConfig);
     manager.addFiles([makeFile("a.bin", 25)]); // 3 chunks
     const id = manager.getSnapshot()[0]!.id;
 
@@ -100,7 +101,7 @@ describe("UploadManager", () => {
       }),
     );
 
-    const manager = new UploadManager(validationConfig, chunkConfig);
+    const manager = createUploadManager(validationConfig, chunkConfig);
     manager.addFiles([makeFile("b.bin", 25)]); // 3 chunks, index 1은 항상 실패
     const id = manager.getSnapshot()[0]!.id;
 
@@ -131,7 +132,7 @@ describe("UploadManager", () => {
       }),
     );
 
-    const manager = new UploadManager(validationConfig, chunkConfig);
+    const manager = createUploadManager(validationConfig, chunkConfig);
     manager.addFiles([makeFile("c.bin", 25)]);
     const id = manager.getSnapshot()[0]!.id;
 
@@ -148,7 +149,7 @@ describe("UploadManager", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    const manager = new UploadManager(validationConfig, chunkConfig);
+    const manager = createUploadManager(validationConfig, chunkConfig);
     manager.addFiles([makeFile("i.bin", 25)]);
     const id = manager.getSnapshot()[0]!.id;
 
@@ -189,7 +190,7 @@ describe("UploadManager", () => {
       }),
     );
 
-    const manager = new UploadManager(validationConfig, chunkConfig);
+    const manager = createUploadManager(validationConfig, chunkConfig);
     manager.addFiles([makeFile("d.bin", 25)]); // 3 chunks
     const id = manager.getSnapshot()[0]!.id;
 
@@ -226,7 +227,7 @@ describe("UploadManager", () => {
       }),
     );
 
-    const manager = new UploadManager(validationConfig, chunkConfig);
+    const manager = createUploadManager(validationConfig, chunkConfig);
     const seenStatuses: string[] = [];
     manager.subscribe(() => {
       const state = manager.getSnapshot()[0];
@@ -256,7 +257,7 @@ describe("UploadManager", () => {
       }),
     );
 
-    const manager = new UploadManager(validationConfig, chunkConfig);
+    const manager = createUploadManager(validationConfig, chunkConfig);
     manager.addFiles([makeFile("f.bin", 10)]);
     const id = manager.getSnapshot()[0]!.id;
     await waitForStatus(manager, id, "success");
@@ -285,7 +286,7 @@ describe("UploadManager", () => {
       }),
     );
 
-    const manager = new UploadManager(validationConfig, chunkConfig);
+    const manager = createUploadManager(validationConfig, chunkConfig);
     manager.addFiles([makeFile("g.bin", 25)]);
     const id = manager.getSnapshot()[0]!.id;
     await waitForStatus(manager, id, "uploading");
@@ -320,7 +321,7 @@ describe("UploadManager", () => {
       }),
     );
 
-    const manager = new UploadManager(validationConfig, chunkConfig);
+    const manager = createUploadManager(validationConfig, chunkConfig);
     manager.addFiles([makeFile("e.bin", 25)]);
     const id = manager.getSnapshot()[0]!.id;
 

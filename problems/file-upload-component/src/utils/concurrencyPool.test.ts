@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ConcurrencyPool } from "./ConcurrencyPool";
+import { createConcurrencyPool } from "./concurrencyPool";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -7,7 +7,7 @@ function sleep(ms: number): Promise<void> {
 
 describe("ConcurrencyPool", () => {
   it("동시 실행 개수가 limit을 넘지 않는다", async () => {
-    const pool = new ConcurrencyPool(2);
+    const pool = createConcurrencyPool(2);
     let current = 0;
     let max = 0;
 
@@ -24,7 +24,7 @@ describe("ConcurrencyPool", () => {
   });
 
   it("모든 task가 결국 실행된다", async () => {
-    const pool = new ConcurrencyPool(1);
+    const pool = createConcurrencyPool(1);
     const order: number[] = [];
 
     await Promise.all(
@@ -39,13 +39,13 @@ describe("ConcurrencyPool", () => {
   });
 
   it("task의 반환값을 그대로 전달한다", async () => {
-    const pool = new ConcurrencyPool(3);
+    const pool = createConcurrencyPool(3);
     const result = await pool.run(async () => 42);
     expect(result).toBe(42);
   });
 
   it("task가 실패해도 슬롯을 반납한다", async () => {
-    const pool = new ConcurrencyPool(1);
+    const pool = createConcurrencyPool(1);
 
     await expect(
       pool.run(async () => {

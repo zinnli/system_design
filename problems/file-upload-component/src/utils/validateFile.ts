@@ -1,11 +1,5 @@
-import { formatBytes } from "./formatBytes";
 import type { RejectedFile, ValidationConfig } from "./types";
-
-export const DEFAULT_VALIDATION_CONFIG: ValidationConfig = {
-  maxFileSizeBytes: 2 * 1024 * 1024 * 1024, // 2GB
-  allowedExtensions: [],
-  maxFiles: 10,
-};
+import { formatBytes } from "./formatBytes";
 
 function getExtension(filename: string): string {
   const idx = filename.lastIndexOf(".");

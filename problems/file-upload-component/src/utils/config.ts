@@ -1,4 +1,10 @@
-import type { ChunkUploadConfig } from "./types";
+import type { ChunkUploadConfig, ValidationConfig } from "./types";
+
+export const DEFAULT_VALIDATION_CONFIG: ValidationConfig = {
+  maxFileSizeBytes: 2 * 1024 * 1024 * 1024, // 2GB
+  allowedExtensions: [],
+  maxFiles: 10,
+};
 
 export const DEFAULT_CHUNK_CONFIG: ChunkUploadConfig = {
   chunkSizeBytes: 5 * 1024 * 1024, // 5MB
