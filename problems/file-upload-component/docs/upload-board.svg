@@ -1,0 +1,229 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 1010" width="1280" height="1010" font-family="'Apple SD Gothic Neo','Noto Sans KR','Helvetica Neue',sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#059669"/>
+    </marker>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+    <style>
+      .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 14; }
+      .pnum { font-size: 22px; font-weight: 700; fill: #2563eb; }
+      .ptitle { font-size: 20px; font-weight: 700; fill: #0f172a; }
+      .lbl { font-size: 15px; fill: #1f2937; }
+      .sm { font-size: 13px; fill: #475569; }
+      .mono { font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 14px; fill: #0f172a; }
+      .monosm { font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 12.5px; fill: #334155; }
+      .box { fill: #f1f5f9; stroke: #94a3b8; stroke-width: 1.4; }
+      .chunk { fill: #dbeafe; stroke: #2563eb; stroke-width: 1.4; }
+      .line { stroke: #334155; stroke-width: 1.6; fill: none; }
+      .lineRed { stroke: #dc2626; stroke-width: 1.6; fill: none; }
+      .lineGreen { stroke: #059669; stroke-width: 1.6; fill: none; }
+      .lineBlue { stroke: #2563eb; stroke-width: 1.6; fill: none; }
+      .dash { stroke: #94a3b8; stroke-width: 1.3; stroke-dasharray: 4 4; fill: none; }
+      .key { font-size: 14px; font-weight: 700; fill: #b45309; }
+      .err { font-size: 14px; font-weight: 700; fill: #dc2626; }
+      .ok { font-size: 14px; font-weight: 700; fill: #059669; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1280" height="1010" fill="#f8fafc"/>
+
+  <!-- Title -->
+  <text x="40" y="48" font-size="26" font-weight="700" fill="#0f172a">대용량 파일 업로드 — 설계 보드</text>
+  <text x="40" y="74" class="sm">① 청크 분할 · ② 전역 동시성 · ③ 2단 재시도 · ④ 단일 signal 취소 · ⑤ 엔진/UI 분리</text>
+
+  <!-- ================= Panel 1 ================= -->
+  <rect class="panel" x="40" y="100" width="590" height="270"/>
+  <text x="62" y="132" class="pnum">①</text>
+  <text x="90" y="132" class="ptitle">청크 분할 + 서버 3단 계약</text>
+
+  <!-- File box -->
+  <rect class="box" x="64" y="158" width="76" height="42" rx="8"/>
+  <text x="102" y="184" class="mono" text-anchor="middle">File</text>
+  <!-- arrow to chunks -->
+  <path class="lineBlue" d="M 146 179 H 232" marker-end="url(#arrowBlue)"/>
+  <text x="189" y="171" class="monosm" text-anchor="middle" fill="#2563eb">slice(5MB)</text>
+  <!-- chunks -->
+  <rect class="chunk" x="238" y="160" width="46" height="38" rx="6"/>
+  <text x="261" y="184" class="mono" text-anchor="middle">c0</text>
+  <rect class="chunk" x="290" y="160" width="46" height="38" rx="6"/>
+  <text x="313" y="184" class="mono" text-anchor="middle">c1</text>
+  <rect class="chunk" x="342" y="160" width="46" height="38" rx="6"/>
+  <text x="365" y="184" class="mono" text-anchor="middle">c2</text>
+  <text x="404" y="185" class="mono" text-anchor="middle">…</text>
+  <rect class="chunk" x="420" y="160" width="46" height="38" rx="6"/>
+  <text x="443" y="184" class="mono" text-anchor="middle">cN</text>
+  <text x="482" y="185" class="sm">복사 아님 — 참조 범위만</text>
+
+  <!-- 3-step contract -->
+  <line class="dash" x1="64" y1="216" x2="606" y2="216"/>
+  <text x="64" y="244" class="mono">initUpload</text>
+  <path class="line" d="M 200 239 H 244" marker-end="url(#arrow)"/>
+  <text x="256" y="244" class="lbl">uploadId 발급</text>
+
+  <text x="64" y="274" class="mono">PUT /chunks/:i</text>
+  <path class="line" d="M 200 269 H 244" marker-end="url(#arrow)"/>
+  <text x="256" y="274" class="lbl">인덱스가 있어 순서 섞여도 조립</text>
+
+  <text x="64" y="304" class="mono">completeUpload</text>
+  <path class="line" d="M 200 299 H 244" marker-end="url(#arrow)"/>
+  <text x="256" y="304" class="lbl">서버가 파일 조립</text>
+
+  <rect x="64" y="320" width="542" height="34" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.3"/>
+  <text x="78" y="342" class="key">핵심 가정 — 서버는 (uploadId, chunkIndex) 기준 upsert = 멱등</text>
+  <text x="530" y="342" class="sm">③의 전제</text>
+
+  <!-- ================= Panel 2 ================= -->
+  <rect class="panel" x="650" y="100" width="590" height="270"/>
+  <text x="672" y="132" class="pnum">②</text>
+  <text x="700" y="132" class="ptitle">동시성 풀은 파일별이 아니라 전역</text>
+
+  <text x="674" y="180" class="lbl">파일 A</text>
+  <rect class="chunk" x="736" y="164" width="26" height="22" rx="4"/>
+  <rect class="chunk" x="766" y="164" width="26" height="22" rx="4"/>
+  <rect class="chunk" x="796" y="164" width="26" height="22" rx="4"/>
+
+  <text x="674" y="214" class="lbl">파일 B</text>
+  <rect class="chunk" x="736" y="198" width="26" height="22" rx="4"/>
+  <rect class="chunk" x="766" y="198" width="26" height="22" rx="4"/>
+
+  <text x="674" y="248" class="lbl">파일 C</text>
+  <rect class="chunk" x="736" y="232" width="26" height="22" rx="4"/>
+  <rect class="chunk" x="766" y="232" width="26" height="22" rx="4"/>
+  <rect class="chunk" x="796" y="232" width="26" height="22" rx="4"/>
+
+  <!-- brace-ish converge -->
+  <path class="line" d="M 836 175 H 856 V 210"/>
+  <path class="line" d="M 836 209 H 856"/>
+  <path class="line" d="M 836 243 H 856 V 210"/>
+  <path class="line" d="M 856 210 H 892" marker-end="url(#arrow)"/>
+
+  <!-- pool box -->
+  <rect x="898" y="164" width="176" height="92" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.6"/>
+  <text x="986" y="188" class="lbl" text-anchor="middle" font-weight="700">전역 세마포어</text>
+  <circle cx="932" cy="212" r="9" fill="#2563eb"/>
+  <circle cx="962" cy="212" r="9" fill="#2563eb"/>
+  <circle cx="992" cy="212" r="9" fill="#2563eb"/>
+  <circle cx="1022" cy="212" r="9" fill="#2563eb"/>
+  <text x="986" y="244" class="sm" text-anchor="middle">동시 4 (in-flight)</text>
+
+  <path class="line" d="M 1080 210 H 1116" marker-end="url(#arrow)"/>
+  <text x="1180" y="215" class="lbl" text-anchor="middle">네트워크</text>
+
+  <rect class="box" x="898" y="268" width="176" height="34" rx="8"/>
+  <text x="986" y="290" class="sm" text-anchor="middle">나머지는 대기열에서 대기</text>
+
+  <rect x="674" y="320" width="542" height="34" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.3"/>
+  <text x="688" y="342" class="lbl">파일이 10개여도 동시 요청은 4개 — 파일 수와 무관하게 네트워크 사용량 예측 가능</text>
+
+  <!-- ================= Panel 3 ================= -->
+  <rect class="panel" x="40" y="390" width="590" height="290"/>
+  <text x="62" y="422" class="pnum">③</text>
+  <text x="90" y="422" class="ptitle">실패 처리 — 2단 재시도</text>
+
+  <text x="64" y="458" class="lbl" font-weight="700">1층 · 자동 재시도 (사용자 모르게)</text>
+  <rect class="box" x="64" y="470" width="96" height="36" rx="8"/>
+  <text x="112" y="493" class="lbl" text-anchor="middle">청크 실패</text>
+  <path class="line" d="M 166 488 H 250" marker-end="url(#arrow)"/>
+  <text x="208" y="480" class="monosm" text-anchor="middle">0.5s→1s→2s</text>
+  <rect class="box" x="256" y="470" width="120" height="36" rx="8"/>
+  <text x="316" y="493" class="lbl" text-anchor="middle">최대 3회 재시도</text>
+  <path class="lineGreen" d="M 382 488 H 452" marker-end="url(#arrowGreen)"/>
+  <text x="470" y="493" class="ok">성공</text>
+
+  <path class="lineRed" d="M 316 512 V 542 H 452" marker-end="url(#arrowRed)"/>
+  <text x="330" y="536" class="sm" fill="#dc2626">3회 소진</text>
+  <text x="470" y="547" class="err">error</text>
+  <text x="64" y="566" class="sm">→ 그 파일의 남은 요청은 전부 abort로 정리</text>
+
+  <line class="dash" x1="64" y1="582" x2="606" y2="582"/>
+
+  <text x="64" y="608" class="lbl" font-weight="700">2층 · 이어올리기 (수동 retry)</text>
+  <rect class="box" x="64" y="620" width="96" height="36" rx="8"/>
+  <text x="112" y="643" class="lbl" text-anchor="middle">retry 클릭</text>
+  <path class="line" d="M 166 638 H 214" marker-end="url(#arrow)"/>
+  <rect x="220" y="618" width="220" height="40" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.4"/>
+  <text x="330" y="635" class="monosm" text-anchor="middle">uploadId 재사용</text>
+  <text x="330" y="651" class="monosm" text-anchor="middle">doneIndexes(성공 청크 Set) 재사용</text>
+  <path class="line" d="M 446 638 H 486" marker-end="url(#arrow)"/>
+  <text x="596" y="632" class="lbl" text-anchor="end">남은 청크만 전송</text>
+  <text x="596" y="652" class="key" text-anchor="end">2GB 파일이라도 5MB만</text>
+
+  <!-- ================= Panel 4 ================= -->
+  <rect class="panel" x="650" y="390" width="590" height="290"/>
+  <text x="672" y="422" class="pnum">④</text>
+  <text x="700" y="422" class="ptitle">취소 — AbortController 하나로 전파</text>
+
+  <text x="674" y="458" class="lbl">파일 1개 = AbortController 1개, 모든 요청이 signal 공유</text>
+
+  <rect class="box" x="674" y="472" width="130" height="30" rx="6"/>
+  <text x="739" y="492" class="mono" text-anchor="middle">initUpload</text>
+  <rect class="box" x="674" y="508" width="130" height="30" rx="6"/>
+  <text x="739" y="528" class="mono" text-anchor="middle">chunks × N</text>
+  <rect class="box" x="674" y="544" width="130" height="30" rx="6"/>
+  <text x="739" y="564" class="mono" text-anchor="middle">completeUpload</text>
+
+  <path class="line" d="M 810 487 H 830 V 523"/>
+  <path class="line" d="M 810 523 H 830"/>
+  <path class="line" d="M 810 559 H 830 V 523"/>
+  <path class="lineRed" d="M 830 523 H 876" marker-end="url(#arrowRed)"/>
+
+  <rect x="882" y="498" width="150" height="50" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="1.6"/>
+  <text x="957" y="520" class="mono" text-anchor="middle">abort()</text>
+  <text x="957" y="538" class="sm" text-anchor="middle">in-flight 한 번에 정리</text>
+
+  <text x="1048" y="518" class="sm">정리 안 하면</text>
+  <text x="1048" y="536" class="sm">대역폭 누수·상태 꼬임</text>
+
+  <rect x="674" y="596" width="542" height="66" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.3"/>
+  <text x="688" y="618" class="monosm">abort("user-cancel")  →  사용자 취소</text>
+  <text x="688" y="638" class="monosm">abort()               →  청크 영구 실패로 인한 내부 정리</text>
+  <text x="688" y="656" class="key">별도 boolean 플래그 없이 signal.reason = 단일 진실 공급원</text>
+
+  <!-- ================= Panel 5 ================= -->
+  <rect class="panel" x="40" y="700" width="1200" height="280"/>
+  <text x="62" y="732" class="pnum">⑤</text>
+  <text x="90" y="732" class="ptitle">레이어 분리 — 로직은 React 밖, UI는 구독만</text>
+
+  <!-- layer 1 -->
+  <rect x="64" y="750" width="700" height="56" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.4"/>
+  <text x="84" y="772" class="mono">components/</text>
+  <text x="196" y="772" class="lbl">Dropzone · FileList · FileItem · ProgressBar · RejectionList</text>
+  <text x="196" y="792" class="sm">프레젠테이션만 — 상태를 만들지 않는다</text>
+
+  <path class="lineBlue" d="M 120 828 V 808" marker-end="url(#arrowBlue)"/>
+  <text x="136" y="822" class="monosm" fill="#2563eb">props</text>
+
+  <!-- layer 2 -->
+  <rect x="64" y="832" width="700" height="56" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.4"/>
+  <text x="84" y="854" class="mono">hooks/</text>
+  <text x="196" y="854" class="lbl">useUploadFiles · useDragDropFiles</text>
+  <text x="196" y="874" class="sm">useSyncExternalStore로 구독 + 이벤트 어댑팅만</text>
+
+  <path class="lineBlue" d="M 120 910 V 890" marker-end="url(#arrowBlue)"/>
+  <text x="136" y="904" class="monosm" fill="#2563eb">subscribe / getSnapshot</text>
+
+  <!-- layer 3 -->
+  <rect x="64" y="914" width="700" height="56" rx="10" fill="#f1f5f9" stroke="#334155" stroke-width="1.6"/>
+  <text x="84" y="936" class="mono">utils/</text>
+  <text x="196" y="936" class="lbl">uploadManager · concurrencyPool · withRetry · chunkFile · validateFile · uploadApi</text>
+  <text x="196" y="956" class="sm">상태 · 청크 · 재시도 · 취소 — React 무관 순수 TS</text>
+
+  <!-- why box -->
+  <rect x="792" y="750" width="424" height="220" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.4"/>
+  <text x="814" y="778" class="lbl" font-weight="700">왜 React 밖으로 뺐나</text>
+  <text x="814" y="808" class="lbl">· 테스트 — 네트워크 계층 mock만으로</text>
+  <text x="828" y="828" class="sm">"동시 업로드 중 취소" 같은 시나리오 검증.</text>
+  <text x="828" y="846" class="sm">엔진 테스트 33개는 React 없이, 전체 42개 통과</text>
+  <text x="814" y="876" class="lbl">· 설명 가능성 — 상태 전이가</text>
+  <text x="828" y="896" class="monosm">createUploadManager</text>
+  <text x="828" y="914" class="sm">하나에 모여 위 → 아래로 읽힘</text>
+  <text x="814" y="944" class="lbl">· 이식성 — Web Worker로 옮겨도 훅만 교체</text>
+</svg>
